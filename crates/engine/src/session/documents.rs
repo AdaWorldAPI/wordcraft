@@ -299,6 +299,8 @@ impl Session {
             others: _,
             order: _,
             untitled_count: _,
+            // The host's choice for the whole session, not a document's.
+            view_only: _,
             #[cfg(not(target_arch = "wasm32"))]
                 recovery: _,
         } = self;

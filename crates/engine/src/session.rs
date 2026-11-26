@@ -267,6 +267,11 @@ pub struct Session {
     order: Vec<u64>,
     /// Untitled documents made so far, for the next one's name (`Document3`).
     untitled_count: u32,
+    /// View only: a host shows documents to read, not to change (`?readonly=1` on the web). Every
+    /// command that would change a document or write a file is refused and greyed out; reading,
+    /// selecting, copying, zooming, navigating and printing still work. Session-wide, so every
+    /// document opened in this session is view only too. See [`crate::cmd::view_only`].
+    pub view_only: bool,
 }
 
 impl Session {

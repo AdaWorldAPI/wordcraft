@@ -113,6 +113,11 @@ impl Session {
         let join = join
             || (equation_join && matches!(id, "equation.type" | "equation.backspace"))
             || (id == "text.insert" && ime_text_join.as_ref().is_some_and(|sel| sel == &self.sel));
+        // View only: nothing that changes a document or writes a file runs, whatever asks for it.
+        // First, so the reason given is the one that holds whatever else changes.
+        if let Some(why) = crate::cmd::view_only::refusal(self, id, spec.mutates) {
+            return Err(CmdError::Disabled(format!("{id}: {why}")));
+        }
         if let Some(why) = (spec.enabled)(self) {
             return Err(CmdError::Disabled(format!("{id}: {why}")));
         }

@@ -51,6 +51,7 @@ pub mod text;
 pub mod tools;
 pub mod user_templates;
 pub mod view;
+pub mod view_only;
 pub mod wordart;
 
 use serde_json::{Value, json};

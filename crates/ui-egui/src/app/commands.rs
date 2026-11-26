@@ -116,6 +116,10 @@ impl WordApp {
         if let Some(error) = self.document_required_error(id) {
             return Err(error);
         }
+        // View only: the web build writes saves and exports itself below, outside `Session::run`.
+        if let Some(error) = self.view_only_error(id) {
+            return Err(error);
+        }
         if let Some(r) = self.ui_command(id, &params) {
             return r;
         }
@@ -336,6 +340,10 @@ impl WordApp {
     /// User commands can ask for a supported Save As target or an opening password (#55).
     /// Scripts and agents use [`WordApp::execute`], which never opens these dialogs.
     pub(crate) fn execute_user(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        // View only: refused before a Save can ask where to save.
+        if let Some(error) = self.view_only_error(id) {
+            return Err(error);
+        }
         // Legacy Word files are import-only (#2445). Only a user's implicit Save asks for
         // a supported target; scripts and explicitly supplied paths keep their normal errors.
         if id == "file.save"
@@ -1065,6 +1073,15 @@ impl WordApp {
         if !matches!(id, "ui.openRecipientList" | "mailings.recipients") {
             self.recipient_list_pending = false;
         }
+    }
+
+    /// The error for a command a view-only session refuses ([`wordcraft_engine::Session::view_only`]),
+    /// worded as the engine words it, and on the status line.
+    fn view_only_error(&mut self, id: &str) -> Option<String> {
+        let why = self.session.view_only_refusal(id)?;
+        let error = format!("not available: {id}: {why}");
+        self.status(tl!(why).to_string());
+        Some(error)
     }
 
     fn document_required_error(&mut self, id: &str) -> Option<String> {

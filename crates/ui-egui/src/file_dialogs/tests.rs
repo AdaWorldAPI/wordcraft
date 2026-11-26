@@ -993,3 +993,25 @@ fn entries_expose_names_selection_and_picking() {
     let answer = h.state_mut().dialog_host.take::<FileChooser>();
     assert_eq!(answer, Some(DialogResult::Ok(Answer::Paths(vec![PathBuf::from("/d/chapter.docx")]))));
 }
+
+/// View only (`Session::view_only`): the web build's own save and export path, which writes
+/// outside `Session::run`, hands the host nothing, from a script or the ribbon alike, and an edit
+/// is refused; reading and copying still run. The same app without view only saves.
+#[test]
+fn a_view_only_session_hands_the_browser_no_save_or_export() {
+    let files = Arc::new(ScriptedFiles::new().in_browser().saving_suggested());
+    let mut a = app_over(&files, wordcraft_doc::Document::from_text("Read me"));
+    a.session.view_only = true;
+    for id in ["file.save", "file.saveAs", "file.exportPdf", "file.exportPng"] {
+        let r = a.execute(id, json!({"path": "Copy.docx"}));
+        assert!(r.as_ref().is_err_and(|e| e.ends_with(wordcraft_engine::cmd::view_only::REASON)), "{id}: {r:?}");
+        assert!(a.run(id, json!({})).is_err(), "{id} from the ribbon");
+    }
+    assert!(files.requests().is_empty(), "the host was asked: {:?}", files.requests());
+    assert!(a.run("text.insert", json!({"text": "x"})).is_err());
+    assert_eq!(a.session.doc.final_text(wordcraft_doc::StoryRef::Body).trim_end(), "Read me");
+    assert!(a.execute("select.all", json!({})).is_ok() && a.execute("edit.copy", json!({})).is_ok());
+    a.session.view_only = false;
+    assert!(a.execute("file.save", json!({"path": "Copy.docx"})).is_ok());
+    assert!(!files.requests().is_empty(), "without view only the save reaches the host");
+}
