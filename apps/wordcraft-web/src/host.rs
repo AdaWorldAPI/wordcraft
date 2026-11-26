@@ -29,6 +29,12 @@
 //! In both host modes the host sends the document to edit, so no sample opens, saves are handed
 //! to the host rather than downloaded, the host guards leaving the page, and `?author=` names the
 //! user for comments and tracked changes.
+//!
+//! View only: `?readonly=1` on the URL, or `data-readonly` on the canvas (page mode, where the URL
+//! is the host page's), opens the document to read, not to change ([`view_only_requested`]). Every
+//! editing command, Save, Save As and the exports are refused and greyed out
+//! (`wordcraft_engine::cmd::view_only`); reading, selecting, copying, zoom, navigation and printing
+//! work. `wordcraft:save` is never sent: the bridge refuses a save itself, whatever asked for it.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -64,14 +70,28 @@ thread_local! {
 #[derive(Clone)]
 pub struct Bridge {
     host: Rc<Host>,
+    /// View only: no save reaches the host page.
+    view_only: bool,
+}
+
+/// Whether the page asked for view only: `?readonly=` on the URL (`1`, `true`, `yes` or empty), or
+/// a `data-readonly` attribute on the canvas other than `false` or `0`.
+pub fn view_only_requested(canvas: &web_sys::HtmlCanvasElement, query: &str) -> bool {
+    let from_url = web_sys::UrlSearchParams::new_with_str(query).ok().and_then(|q| q.get("readonly")).is_some_and(|v| is_on(&v));
+    from_url || canvas.get_attribute("data-readonly").is_some_and(|v| is_on(&v))
+}
+
+/// A flag's value turns it on unless it says off.
+fn is_on(value: &str) -> bool {
+    !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off")
 }
 
 impl Bridge {
     /// The bridge for this page, or `None` when WordCraft isn't hosted: no `?host=parent` and no
     /// `data-host="page"` on the canvas, an unframed `?host=parent` page (it stays the normal app
     /// with downloads), or a parent on another origin.
-    pub fn detect(canvas: &web_sys::HtmlCanvasElement) -> Option<Self> {
-        Some(Self { host: Rc::new(Host::connect(APP, canvas)?) })
+    pub fn detect(canvas: &web_sys::HtmlCanvasElement, view_only: bool) -> Option<Self> {
+        Some(Self { host: Rc::new(Host::connect(APP, canvas)?), view_only })
     }
 
     /// Report unsaved changes to the host page, hear the files it sends, and let [`HostedFiles`]
@@ -102,6 +122,9 @@ impl Bridge {
     }
 
     fn post_save(&self, path: &str, bytes: &[u8], save_as: bool) -> Result<(), String> {
+        if self.view_only {
+            return Err(wordcraft_engine::cmd::view_only::REASON.to_string());
+        }
         let name = Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string());
         self.host.post_save(&name, bytes, None, save_as)
     }

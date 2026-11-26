@@ -41,7 +41,9 @@ pub fn start() {
         // own stays the normal app with downloads. `data-host="page"` on the canvas opts a page
         // in instead: it runs WordCraft in its own document and talks over DOM `CustomEvent`s
         // on the canvas (`host`). The host guards leaving the page, so this one doesn't.
-        let bridge = crate::host::Bridge::detect(&canvas);
+        // View only (`?readonly=1`, `data-readonly`): no editing command or save runs (`host`).
+        let view_only = crate::host::view_only_requested(&canvas, &query());
+        let bridge = crate::host::Bridge::detect(&canvas, view_only);
         let app_bridge = bridge.clone();
         let dirty = Rc::new(Cell::new(false));
         let mut options = eframe::WebOptions::default();
@@ -127,6 +129,10 @@ pub fn start() {
                     let mut app =
                         WordApp::new(session, services).with_host(host).with_settings(settings.clone()).with_control(ControlChannel::new(requests));
                     app.autosave = false;
+                    if view_only {
+                        app.session.view_only = true;
+                        app.status(wordcraft_ui_egui::i18n::t(wordcraft_engine::cmd::view_only::REASON).to_string());
+                    }
                     app.tell_about_font_downloads();
                     // A region chosen in File › Options replaces the browser's for the first blank
                     // document too (#838).

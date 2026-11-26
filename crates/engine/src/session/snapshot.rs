@@ -138,6 +138,8 @@ impl Session {
             others: _,
             order: _,
             untitled_count: _,
+            // The host's choice for the session: no command changes it.
+            view_only: _,
             ime_body_epoch,
             // The IME revision and its caret token are process-global evidence, not document
             // state: a rollback must not reuse a revision.
@@ -271,7 +273,8 @@ impl Session {
     /// Restrict Editing refuses outright. `None` when it can run (or doesn't exist).
     pub fn why_disabled(&self, id: &str) -> Option<&'static str> {
         let spec = self.registry.get(id)?;
-        (spec.enabled)(self)
+        crate::cmd::view_only::refusal(self, id, spec.mutates)
+            .or_else(|| (spec.enabled)(self))
             .or_else(|| crate::cmd::md_source::refusal(self, id, spec.mutates))
             .or_else(|| if spec.mutates { crate::cmd::protect::greyed_out(self, id, || self.protect_facts()) } else { None })
     }
